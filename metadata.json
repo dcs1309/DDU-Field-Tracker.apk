@@ -1,0 +1,6 @@
+{
+  "name": "DDU Field Intelligence",
+  "description": "From Field Data to Verified Local Opportunities. Digital Field Intelligence & Stage 1 Opportunity Discovery for institutional demand, local shop demand, and livelihood enterprise ecosystems.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

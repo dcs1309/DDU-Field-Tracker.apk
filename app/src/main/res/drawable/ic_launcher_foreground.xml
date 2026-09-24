@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group
+        android:translateX="0"
+        android:translateY="0">
+        <!-- Connecting network lines -->
+        <path
+            android:fillColor="#00000000"
+            android:strokeColor="#80CBC4"
+            android:strokeWidth="2.5"
+            android:strokeLineCap="round"
+            android:pathData="M38,62 L54,42 L70,62 M54,42 L54,74" />
+        <!-- Institutional Structure / Building Pediment -->
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M54,28 L34,39 L74,39 Z" />
+        <!-- Pillars -->
+        <path
+            android:fillColor="#E0F2F1"
+            android:pathData="M37,42 H42 V60 H37 Z M51,42 H57 V60 H51 Z M66,42 H71 V60 H66 Z" />
+        <!-- Base of Institution -->
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M32,60 H76 V64 H32 Z" />
+        <!-- Field Opportunity Star / Discovery Lens / Node -->
+        <path
+            android:fillColor="#FFB74D"
+            android:pathData="M54,67 C57.31,67 60,69.69 60,73 C60,76.31 57.31,79 54,79 C50.69,79 48,76.31 48,73 C48,69.69 50.69,67 54,67 Z" />
+        <!-- Left node -->
+        <path
+            android:fillColor="#4DB6AC"
+            android:pathData="M38,64 C40.2,64 42,65.8 42,68 C42,70.2 40.2,72 38,72 C35.8,72 34,70.2 34,68 C34,65.8 35.8,64 38,64 Z" />
+        <!-- Right node -->
+        <path
+            android:fillColor="#4DB6AC"
+            android:pathData="M70,64 C72.2,64 74,65.8 74,68 C74,70.2 72.2,72 70,72 C67.8,72 66,70.2 66,68 C66,65.8 67.8,64 70,64 Z" />
+        <!-- Sprouting Opportunity Leaf -->
+        <path
+            android:fillColor="#81C784"
+            android:pathData="M54,24 C57,20 62,19 65,22 C65,25 63,28 58,28 C56,28 54.5,26.5 54,24 Z" />
+    </group>
+</vector>
