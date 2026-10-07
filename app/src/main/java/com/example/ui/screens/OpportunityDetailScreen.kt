@@ -9,6 +9,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -23,6 +24,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.model.OpportunityStage
+import com.example.ui.components.opportunity.OpportunityLineageHelper
+import com.example.ui.components.opportunity.OpportunitySourceRecordsDialog
 import com.example.ui.theme.DduPrimary
 import com.example.viewmodel.FieldIntelligenceViewModel
 
@@ -41,6 +44,8 @@ fun OpportunityDetailScreen(
     val allSurveys by viewModel.allSurveysWithDetails.collectAsStateWithLifecycle()
 
     val opp = opportunities.find { it.oppId == oppId } ?: opportunities.firstOrNull()
+
+    var showSourceRecordsDialog by remember { mutableStateOf(false) }
 
     if (opp == null) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -83,7 +88,7 @@ fun OpportunityDetailScreen(
                 },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 }
             )
@@ -272,6 +277,155 @@ fun OpportunityDetailScreen(
                 }
             }
 
+            // Data Lineage & Supporting Evidence Section
+            item {
+                val supportingSurveys = remember(opp, allSurveys) {
+                    OpportunityLineageHelper.getSupportingDataForOpportunity(opp, allSurveys)
+                }
+                val photoCount = remember(supportingSurveys) {
+                    supportingSurveys.flatMap { it.evidenceList }.count { it.type == "PHOTO" || it.type == "DOCUMENT" }
+                }
+                val voiceCount = remember(supportingSurveys) {
+                    supportingSurveys.flatMap { it.evidenceList }.count { it.type == "VOICE_NOTE" }
+                }
+
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    shape = RoundedCornerShape(16.dp),
+                    border = BorderStroke(1.dp, DduPrimary.copy(alpha = 0.5f)),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                    modifier = Modifier.fillMaxWidth().testTag("card_data_lineage_${opp.oppId}")
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(32.dp)
+                                        .clip(CircleShape)
+                                        .background(DduPrimary.copy(alpha = 0.15f)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        Icons.Default.AccountTree,
+                                        contentDescription = null,
+                                        tint = DduPrimary,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Column {
+                                    Text(
+                                        text = "DATA LINEAGE & FIELD EVIDENCE",
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 13.sp,
+                                        color = DduPrimary,
+                                        letterSpacing = 0.5.sp
+                                    )
+                                    Text(
+                                        text = "Traceable back to primary validated field data",
+                                        fontSize = 11.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+
+                            Surface(
+                                color = Color(0xFF10B981).copy(alpha = 0.15f),
+                                shape = RoundedCornerShape(6.dp)
+                            ) {
+                                Text(
+                                    text = "${opp.confidence} CONFIDENCE",
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF10B981),
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        // Supporting Evidence Summary Chips
+                        Surface(
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(Icons.Default.Description, contentDescription = null, tint = DduPrimary, modifier = Modifier.size(14.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("${supportingSurveys.size} Surveys", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                }
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(Icons.Default.PhotoLibrary, contentDescription = null, tint = Color(0xFF0284C7), modifier = Modifier.size(14.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("$photoCount Photos & Bills", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                }
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(Icons.Default.Mic, contentDescription = null, tint = Color(0xFFEA580C), modifier = Modifier.size(14.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("$voiceCount Voice Notes", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        Text(
+                            text = if (opp.evidenceSummary.isNotBlank()) opp.evidenceSummary else "Collected by surveyor team across multiple village clusters with validated GPS coordinates.",
+                            fontSize = 11.5.sp,
+                            lineHeight = 16.sp,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+
+                        Spacer(modifier = Modifier.height(14.dp))
+
+                        // View Source Records Button
+                        Button(
+                            onClick = { showSourceRecordsDialog = true },
+                            colors = ButtonDefaults.buttonColors(containerColor = DduPrimary),
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(44.dp)
+                                .testTag("btn_view_source_records_${opp.oppId}")
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.Center,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    Icons.Default.Source,
+                                    contentDescription = null,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(17.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "View Source Records & Supporting Evidence",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 12.5.sp,
+                                    color = Color.White
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
             // Stage 2 Village Production Assessment Gate
             item {
                 Card(
@@ -399,5 +553,21 @@ fun OpportunityDetailScreen(
                 Spacer(modifier = Modifier.height(32.dp))
             }
         }
+    }
+
+    if (showSourceRecordsDialog) {
+        val supporting = OpportunityLineageHelper.getSupportingDataForOpportunity(opp, allSurveys)
+        OpportunitySourceRecordsDialog(
+            opportunityId = opp.oppId,
+            opportunityTitle = opp.title,
+            category = opp.category,
+            confidenceLevel = opp.confidence,
+            matchingSurveys = supporting,
+            onNavigateToRecord = { dduId ->
+                showSourceRecordsDialog = false
+                onNavigateToRecord(dduId)
+            },
+            onDismiss = { showSourceRecordsDialog = false }
+        )
     }
 }

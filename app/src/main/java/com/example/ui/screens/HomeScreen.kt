@@ -35,6 +35,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.model.SurveyWithDetails
 import com.example.data.model.UserRole
 import com.example.ui.components.*
+import com.example.ui.components.opportunity.OpportunityLineageHelper
+import com.example.ui.components.opportunity.OpportunitySourceRecordsDialog
 import com.example.ui.theme.*
 import com.example.viewmodel.FieldIntelligenceViewModel
 
@@ -54,6 +56,7 @@ fun HomeScreen(
     onNavigateToNewSakhyaScreening: (String?) -> Unit = {},
     onNavigateToStage2Assessment: (String?, String?) -> Unit = { _, _ -> },
     onNavigateToStage2DduSelection: () -> Unit = {},
+    onNavigateToWebPortal: () -> Unit = {},
     onSignOut: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
@@ -80,7 +83,27 @@ fun HomeScreen(
     var showExportDialog by remember { mutableStateOf(false) }
     var showRoleDialog by remember { mutableStateOf(false) }
     var showSyncDialog by remember { mutableStateOf(false) }
+    var showHeroLineageDialog by remember { mutableStateOf(false) }
     var selectedFilterCategory by remember { mutableStateOf("ALL") }
+
+    if (showHeroLineageDialog) {
+        val topOpp = allOpps.find { it.oppId == "OPP-024" } ?: allOpps.firstOrNull()
+        if (topOpp != null) {
+            val supporting = OpportunityLineageHelper.getSupportingDataForOpportunity(topOpp, surveys)
+            OpportunitySourceRecordsDialog(
+                opportunityId = topOpp.oppId,
+                opportunityTitle = topOpp.title,
+                category = topOpp.category,
+                confidenceLevel = topOpp.confidence,
+                matchingSurveys = supporting,
+                onNavigateToRecord = { dduId ->
+                    showHeroLineageDialog = false
+                    onNavigateToRecords(dduId)
+                },
+                onDismiss = { showHeroLineageDialog = false }
+            )
+        }
+    }
 
     if (showSyncDialog) {
         RoomCacheSyncDialog(
@@ -453,26 +476,51 @@ fun HomeScreen(
                                     )
                                 }
 
-                                Button(
-                                    onClick = onNavigateToOpportunityGraph,
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = Color.White,
-                                        contentColor = if (isDarkTheme) Color(0xFF0F3631) else Color(0xFF0F766E)
-                                    ),
-                                    shape = RoundedCornerShape(14.dp),
-                                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
-                                ) {
-                                    Text(
-                                        text = "View Graph",
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Icon(
-                                        imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(14.dp)
-                                    )
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    OutlinedButton(
+                                        onClick = { showHeroLineageDialog = true },
+                                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
+                                        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.85f)),
+                                        shape = RoundedCornerShape(14.dp),
+                                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                                        modifier = Modifier.testTag("hero_btn_view_source_records")
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Source,
+                                            contentDescription = null,
+                                            tint = Color.White,
+                                            modifier = Modifier.size(13.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text(
+                                            text = "View Source Records",
+                                            fontSize = 10.5.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color.White
+                                        )
+                                    }
+
+                                    Button(
+                                        onClick = onNavigateToOpportunityGraph,
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = Color.White,
+                                            contentColor = if (isDarkTheme) Color(0xFF0F3631) else Color(0xFF0F766E)
+                                        ),
+                                        shape = RoundedCornerShape(14.dp),
+                                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                                    ) {
+                                        Text(
+                                            text = "Graph",
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Icon(
+                                            imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(13.dp)
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -641,6 +689,25 @@ fun HomeScreen(
                             title = "Prospects (${sakhyaScreenings.size})",
                             icon = Icons.Default.Groups,
                             onClick = onNavigateToSakhyaList,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        QuickActionButton(
+                            title = "Master Web Portal",
+                            icon = Icons.Default.Language,
+                            isPrimary = true,
+                            onClick = onNavigateToWebPortal,
+                            modifier = Modifier.weight(1f)
+                        )
+                        QuickActionButton(
+                            title = "Power BI Hub",
+                            icon = Icons.Default.BarChart,
+                            isPrimary = false,
+                            onClick = onNavigateToInsights,
                             modifier = Modifier.weight(1f)
                         )
                     }

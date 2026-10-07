@@ -5,6 +5,7 @@ import android.content.Context
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import android.view.MotionEvent
 import android.webkit.ConsoleMessage
 import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
@@ -47,8 +48,8 @@ class MapController {
         webView?.evaluateJavascript("if (window.flyToLocation) window.flyToLocation($lat, $lng, $zoom);", null)
     }
 
-    fun selectMarker(dduId: String) {
-        webView?.evaluateJavascript("if (window.selectMarker) window.selectMarker('$dduId', true);", null)
+    fun selectMarker(dduId: String, pan: Boolean = true) {
+        webView?.evaluateJavascript("if (window.selectMarker) window.selectMarker('$dduId', $pan);", null)
     }
 
     fun setLayer(layer: String) {
@@ -81,12 +82,12 @@ class MapBridge(
     }
 }
 
-@SuppressLint("SetJavaScriptEnabled")
+@SuppressLint("SetJavaScriptEnabled", "ClickableViewAccessibility")
 @Composable
 fun GoogleSatelliteMapView(
     surveys: List<SurveyWithDetails>,
     selectedSurvey: SurveyWithDetails?,
-    mapLayerType: String, // "HYBRID", "SATELLITE", "ESRI", "STREET"
+    mapLayerType: String, // "HYBRID", "SATELLITE", "VOYAGER", "STREET", "ESRI"
     targetLocation: Pair<Double, Double>?,
     targetZoom: Int?,
     onSurveySelected: (SurveyWithDetails) -> Unit,
@@ -106,7 +107,7 @@ fun GoogleSatelliteMapView(
     LaunchedEffect(selectedSurvey?.survey?.dduId) {
         val id = selectedSurvey?.survey?.dduId
         if (id != null) {
-            mapController.selectMarker(id)
+            mapController.selectMarker(id, pan = false)
         }
     }
 
@@ -139,12 +140,28 @@ fun GoogleSatelliteMapView(
                 settings.useWideViewPort = true
                 settings.allowFileAccess = true
                 settings.allowContentAccess = true
-                settings.setSupportZoom(true)
+                settings.setSupportZoom(false)
                 settings.builtInZoomControls = false
                 settings.displayZoomControls = false
                 settings.mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
                 settings.cacheMode = WebSettings.LOAD_DEFAULT
-                settings.userAgentString = "Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
+                settings.userAgentString = "Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36"
+
+                // Prevent Jetpack Compose from stealing pinch, drag, and pan touch gestures
+                setOnTouchListener { v, event ->
+                    when (event.actionMasked) {
+                        MotionEvent.ACTION_DOWN,
+                        MotionEvent.ACTION_MOVE,
+                        MotionEvent.ACTION_POINTER_DOWN -> {
+                            v.parent?.requestDisallowInterceptTouchEvent(true)
+                        }
+                        MotionEvent.ACTION_UP,
+                        MotionEvent.ACTION_CANCEL -> {
+                            v.parent?.requestDisallowInterceptTouchEvent(false)
+                        }
+                    }
+                    false
+                }
 
                 webViewClient = object : WebViewClient() {
                     override fun onPageFinished(view: WebView?, url: String?) {
@@ -212,9 +229,13 @@ private fun generateSurveysJson(surveys: List<SurveyWithDetails>): String {
 }
 
 /**
- * Builds the resilient, dual-engine Leaflet + Interactive Vector Canvas Map HTML.
- * Includes multiple CDN fallbacks, Google Hybrid Satellite, ESRI World Imagery,
- * OSM, Village Settlement Halos, Building Footprints, and automatic high-res Canvas fallback.
+ * Builds the resilient, multi-layer Leaflet + Interactive Vector Canvas Map HTML.
+ * Features:
+ * - Multi-CDN Leaflet loader with automatic fallback
+ * - Google Satellite Hybrid, Google Pure Satellite, CartoDB Voyager, Esri World Imagery, OpenStreetMap
+ * - maxNativeZoom: 19 so zooming into building level (19-20) never produces blank 404 tiles
+ * - Precise iconAnchor for pixel-accurate pin tapping
+ * - Village Clusters, Building compound footprints, and offline vector fallback
  */
 private fun buildMapHtml(
     surveys: List<SurveyWithDetails>,
@@ -222,7 +243,7 @@ private fun buildMapHtml(
     initialLayer: String
 ): String {
     val surveysJson = generateSurveysJson(surveys)
-    val defaultId = initialSelectedId ?: (surveys.firstOrNull()?.survey?.dduId ?: "")
+    val defaultId = initialSelectedId ?: ""
 
     return """
 <!DOCTYPE html>
@@ -230,11 +251,13 @@ private fun buildMapHtml(
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>DDU Field Satellite Map</title>
+  <title>Field Intelligence Map</title>
   
-  <!-- Primary CDN -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <!-- Leaflet CSS from reliable Cloudflare CDN with jsDelivr fallback -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" 
+        onerror="this.onerror=null;this.href='https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css';" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.Default.css" />
   
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -246,6 +269,7 @@ private fun buildMapHtml(
       overflow: hidden;
       user-select: none;
       -webkit-user-select: none;
+      touch-action: none;
     }
     
     #map-container {
@@ -258,6 +282,7 @@ private fun buildMapHtml(
       width: 100%;
       height: 100%;
       background: #090e17;
+      touch-action: none;
     }
 
     #vector-canvas {
@@ -268,32 +293,36 @@ private fun buildMapHtml(
       height: 100%;
       display: none;
       background: #080d14;
+      touch-action: none;
     }
     
-    /* High-contrast custom pin styling on satellite imagery */
-    .pin-container {
+    /* Pixel-perfect Leaflet Pin Marker Styles */
+    .ddu-marker-wrap {
       display: flex;
       flex-direction: column;
       align-items: center;
       cursor: pointer;
+      position: relative;
+      width: 38px;
+      height: 48px;
     }
     
-    .pin-marker {
-      width: 32px;
-      height: 32px;
+    .pin-body {
+      width: 36px;
+      height: 36px;
       border-radius: 50% 50% 50% 0;
       transform: rotate(-45deg);
       display: flex;
       align-items: center;
       justify-content: center;
-      box-shadow: 0 4px 10px rgba(0,0,0,0.85), 0 0 0 2.5px #ffffff;
-      transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+      box-shadow: 0 4px 10px rgba(0,0,0,0.6), 0 0 0 2px #ffffff;
+      transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.25s ease;
     }
     
-    .pin-marker.selected {
-      transform: rotate(-45deg) scale(1.3);
-      box-shadow: 0 0 0 3px #ffffff, 0 0 22px #38bdf8, 0 8px 16px rgba(0,0,0,0.9);
-      z-index: 1000 !important;
+    .ddu-marker-wrap.selected .pin-body {
+      transform: rotate(-45deg) scale(1.25);
+      box-shadow: 0 0 0 3px #ffffff, 0 0 20px #38bdf8, 0 6px 14px rgba(0,0,0,0.8);
+      z-index: 9999 !important;
     }
     
     .pin-icon {
@@ -302,92 +331,59 @@ private fun buildMapHtml(
       line-height: 1;
     }
     
-    .pin-label-pill {
-      background: rgba(15, 23, 42, 0.94);
-      backdrop-filter: blur(4px);
-      -webkit-backdrop-filter: blur(4px);
+    .pin-tag {
+      position: absolute;
+      top: 38px;
+      background: rgba(15, 23, 42, 0.95);
       color: #ffffff;
-      font-size: 11px;
+      font-size: 9px;
       font-weight: 700;
-      padding: 3px 8px;
-      border-radius: 6px;
-      margin-top: 5px;
+      padding: 2px 6px;
+      border-radius: 4px;
       white-space: nowrap;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.9);
+      box-shadow: 0 2px 6px rgba(0,0,0,0.7);
       border: 1px solid rgba(255, 255, 255, 0.35);
-      text-shadow: 0 1px 3px rgba(0,0,0,0.9);
-      letter-spacing: 0.2px;
-      max-width: 150px;
+      max-width: 100px;
       overflow: hidden;
       text-overflow: ellipsis;
       text-align: center;
+      pointer-events: none;
     }
 
-    .pin-label-village {
-      font-size: 9px;
-      color: #38bdf8;
-      font-weight: 600;
-      display: block;
-      line-height: 1.1;
+    /* Cluster Marker Styles */
+    .ddu-cluster-wrap {
+      background: transparent;
+      border: none;
     }
-
-    /* Building & Settlement Footprint Overlays */
-    .building-outline {
-      stroke: #38bdf8;
-      stroke-width: 2.5;
-      fill: #0284c7;
-      fill-opacity: 0.35;
-      stroke-dasharray: 4, 3;
-    }
-    
-    .village-halo {
-      stroke: #10b981;
-      stroke-width: 1.5;
-      stroke-dasharray: 6, 4;
-      fill: #10b981;
-      fill-opacity: 0.08;
-    }
-
-    /* Custom Leaflet Controls & Popups */
-    .leaflet-popup-content-wrapper {
-      background: rgba(15, 23, 42, 0.96);
-      backdrop-filter: blur(8px);
-      -webkit-backdrop-filter: blur(8px);
-      color: #f8fafc;
-      border-radius: 12px;
-      border: 1px solid rgba(255,255,255,0.2);
-      box-shadow: 0 12px 28px rgba(0,0,0,0.8);
-      padding: 4px;
-    }
-    .leaflet-popup-tip {
-      background: #0f172a;
-    }
-    .popup-content {
-      padding: 6px 4px;
-    }
-    .popup-title {
-      font-weight: 800;
-      font-size: 13px;
+    .ddu-cluster-bubble {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
       color: #ffffff;
-      margin: 0 0 2px 0;
+      font-weight: 800;
+      font-size: 14px;
+      line-height: 1;
+      border: 3px solid #ffffff;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.6);
+      transition: transform 0.2s ease;
     }
-    .popup-sub {
-      font-size: 11px;
-      color: #94a3b8;
-      margin: 0 0 6px 0;
+    .ddu-cluster-bubble:hover {
+      transform: scale(1.1);
     }
-    .popup-tag {
-      display: inline-block;
-      padding: 2px 6px;
-      border-radius: 4px;
-      font-size: 10px;
-      font-weight: 700;
-      background: rgba(14, 165, 233, 0.25);
-      color: #38bdf8;
-      margin-bottom: 6px;
+    .ddu-cluster-bubble small {
+      font-size: 7px;
+      letter-spacing: 0.5px;
+      opacity: 0.9;
     }
+    .ddu-cluster-small { background: #00796B; }
+    .ddu-cluster-medium { background: #0284C7; }
+    .ddu-cluster-large { background: #E65100; }
 
-    /* Notification badge */
+    /* Status badge pill */
     #status-banner {
       position: absolute;
       bottom: 8px;
@@ -403,12 +399,21 @@ private fun buildMapHtml(
       pointer-events: none;
     }
   </style>
+
+  <!-- Leaflet JS from reliable Cloudflare CDN with jsDelivr fallback -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/leaflet.markercluster.js"></script>
+  <script>
+    if (typeof L === 'undefined') {
+      document.write('<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"><\/script>');
+    }
+  </script>
 </head>
 <body>
   <div id="map-container">
     <div id="map"></div>
     <canvas id="vector-canvas"></canvas>
-    <div id="status-banner">🛰️ Satellite Engine Active</div>
+    <div id="status-banner">🛰️ Loading Field Map...</div>
   </div>
 
   <script>
@@ -422,7 +427,7 @@ private fun buildMapHtml(
     var activeEngine = "leaflet"; // "leaflet" or "vector"
     var isMapInitialized = false;
 
-    // Village Clusters & Boundaries definition
+    // Village Clusters & Boundaries
     var villageClusters = [
       { name: "Rampur Tola Cluster (DDU Tailoring Hub)", center: [27.4312, 82.1892], radius: 240, color: "#10b981" },
       { name: "Juri Healthcare Cluster (Dorika Hospital)", center: [27.4280, 82.1950], radius: 210, color: "#06b6d4" },
@@ -483,27 +488,6 @@ private fun buildMapHtml(
       }
     ];
 
-    // Safe tile layer creator with automatic fallback on tile error
-    function createSafeTileLayer(url, fallbackUrl, options) {
-      var layer = L.tileLayer(url, options);
-      if (fallbackUrl) {
-        layer.on('tileerror', function(error, tile) {
-          if (!tile._fallbackUsed) {
-            tile._fallbackUsed = true;
-            var coords = error.coords;
-            var sub = (options.subdomains && options.subdomains.length) ? options.subdomains[Math.abs(coords.x + coords.y) % options.subdomains.length] : 'a';
-            var sUrl = fallbackUrl
-              .replace('{z}', coords.z)
-              .replace('{x}', coords.x)
-              .replace('{y}', coords.y)
-              .replace('{s}', sub);
-            error.tile.src = sUrl;
-          }
-        });
-      }
-      return layer;
-    }
-
     var tileLayers = {};
 
     function initLeafletMap() {
@@ -512,32 +496,46 @@ private fun buildMapHtml(
           throw new Error("Leaflet library not loaded");
         }
 
-        var esriUrl = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
-        var osmUrl = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+        // Multiple resilient tile providers with maxNativeZoom: 19 so zooming into building level (19-20) upscales seamlessly
+        var googleHybrid = L.tileLayer('https://mt{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
+          subdomains: ['0', '1', '2', '3'],
+          maxZoom: 20,
+          maxNativeZoom: 19,
+          attribution: '© Google Satellite'
+        });
+
+        var googleSatellite = L.tileLayer('https://mt{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', {
+          subdomains: ['0', '1', '2', '3'],
+          maxZoom: 20,
+          maxNativeZoom: 19,
+          attribution: '© Google'
+        });
+
+        var cartoVoyager = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+          subdomains: 'abcd',
+          maxZoom: 20,
+          maxNativeZoom: 19,
+          attribution: '© CartoDB'
+        });
+
+        var osmStreet = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          maxZoom: 19,
+          maxNativeZoom: 19,
+          attribution: '© OpenStreetMap'
+        });
+
+        var esriWorld = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+          maxZoom: 19,
+          maxNativeZoom: 18,
+          attribution: '© Esri'
+        });
 
         tileLayers = {
-          HYBRID: createSafeTileLayer('https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', esriUrl, {
-            subdomains: ['0', '1', '2', '3'],
-            maxZoom: 21,
-            maxNativeZoom: 20,
-            attribution: '© Google Satellite'
-          }),
-          SATELLITE: createSafeTileLayer('https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', esriUrl, {
-            subdomains: ['0', '1', '2', '3'],
-            maxZoom: 21,
-            maxNativeZoom: 20,
-            attribution: '© Google Pure Satellite'
-          }),
-          ESRI: createSafeTileLayer(esriUrl, osmUrl, {
-            maxZoom: 21,
-            maxNativeZoom: 19,
-            attribution: '© Esri Earth'
-          }),
-          STREET: createSafeTileLayer(osmUrl, esriUrl, {
-            maxZoom: 21,
-            maxNativeZoom: 19,
-            attribution: '© OpenStreetMap'
-          })
+          HYBRID: googleHybrid,
+          SATELLITE: googleSatellite,
+          VOYAGER: cartoVoyager,
+          STREET: osmStreet,
+          ESRI: esriWorld
         };
 
         map = L.map('map', {
@@ -609,6 +607,8 @@ private fun buildMapHtml(
       });
     }
 
+    var markersClusterGroup = null;
+
     function renderMarkers(surveys) {
       if (activeEngine === "vector") {
         vectorState.surveys = surveys;
@@ -617,59 +617,72 @@ private fun buildMapHtml(
       }
       if (!map) return;
 
+      if (markersClusterGroup) {
+        map.removeLayer(markersClusterGroup);
+      }
       Object.keys(markersMap).forEach(function(k) {
-        map.removeLayer(markersMap[k].marker);
+        if (markersMap[k].marker) {
+          map.removeLayer(markersMap[k].marker);
+        }
       });
       markersMap = {};
 
+      var useCluster = (typeof L.markerClusterGroup !== 'undefined');
+      if (useCluster) {
+        markersClusterGroup = L.markerClusterGroup({
+          maxClusterRadius: 40,
+          spiderfyOnMaxZoom: true,
+          showCoverageOnHover: false,
+          zoomToBoundsOnClick: true,
+          iconCreateFunction: function(cluster) {
+            var count = cluster.getChildCount();
+            var cClass = 'ddu-cluster-small';
+            if (count >= 8) cClass = 'ddu-cluster-large';
+            else if (count >= 4) cClass = 'ddu-cluster-medium';
+            return L.divIcon({
+              html: '<div class="ddu-cluster-bubble ' + cClass + '"><span>' + count + '</span><small>DDU</small></div>',
+              className: 'ddu-cluster-wrap',
+              iconSize: [44, 44]
+            });
+          }
+        });
+      } else {
+        markersClusterGroup = L.layerGroup();
+      }
+
       surveys.forEach(function(s) {
-        var markerColor = "#00796B";
-        var emoji = "🏫";
-        if (s.type === "INSTITUTION") {
-          markerColor = "#00796B";
-          emoji = "🏛️";
-        } else if (s.type === "LOCAL_SHOP") {
-          markerColor = "#E65100";
+        var markerColor = "#15803D";
+        var emoji = "🏛️";
+        var t = (s.type || "").toUpperCase();
+        if (t.indexOf("INSTITUTION") !== -1 || t.indexOf("SCHOOL") !== -1 || t.indexOf("HOSPITAL") !== -1 || t.indexOf("GOVT") !== -1) {
+          markerColor = "#15803D"; // Green for institutional demand
+          emoji = (t.indexOf("HOSPITAL") !== -1) ? "🏥" : (t.indexOf("SCHOOL") !== -1) ? "🏫" : "🏛️";
+        } else if (t.indexOf("SHOP") !== -1 || t.indexOf("RETAIL") !== -1 || t.indexOf("STORE") !== -1 || t.indexOf("MERCHANT") !== -1) {
+          markerColor = "#0284C7"; // Blue for local shop
           emoji = "🏪";
-        } else if (s.type === "SUPPLIER") {
-          markerColor = "#1565C0";
-          emoji = "📦";
         } else {
-          markerColor = "#7B1FA2";
-          emoji = "🔍";
+          markerColor = "#EA580C"; // Orange for livelihood ecosystem
+          emoji = (t.indexOf("SUPPLIER") !== -1) ? "📦" : (t.indexOf("TEXTILE") !== -1 || t.indexOf("SAKHYA") !== -1) ? "🧵" : "🌾";
         }
 
         var isSelected = (s.dduId === selectedId);
         var iconHtml = 
-          "<div class='pin-container' id='pin-" + s.dduId + "'>" +
-            "<div class='pin-marker " + (isSelected ? "selected" : "") + "' style='background: " + markerColor + ";'>" +
+          "<div class='ddu-marker-wrap " + (isSelected ? "selected" : "") + "' id='pin-" + s.dduId + "'>" +
+            "<div class='pin-body' style='background: " + markerColor + ";'>" +
               "<span class='pin-icon'>" + emoji + "</span>" +
             "</div>" +
-            "<div class='pin-label-pill'>" +
-              s.name +
-              "<span class='pin-label-village'>" + s.village + "</span>" +
-            "</div>" +
+            "<div class='pin-tag'>" + s.name + "</div>" +
           "</div>";
 
+        // Accurate anchor pointing to the tip of the pin
         var customIcon = L.divIcon({
-          className: 'ddu-marker-icon',
+          className: 'ddu-icon-wrapper',
           html: iconHtml,
-          iconSize: [120, 56],
-          iconAnchor: [60, 28]
+          iconSize: [38, 48],
+          iconAnchor: [19, 36]
         });
 
-        var marker = L.marker([s.lat, s.lng], { icon: customIcon }).addTo(map);
-
-        var popupHtml =
-          "<div class='popup-content'>" +
-            "<span class='popup-tag'>" + s.type + " • " + s.entityType + "</span>" +
-            "<h4 class='popup-title'>" + s.name + "</h4>" +
-            "<p class='popup-sub'>📍 " + s.village + " (" + s.tola + ")</p>" +
-            "<p style='font-size:11px; margin:0 0 6px 0; color:#cbd5e1;'>📦 <b>Demand:</b> " + s.products + "</p>" +
-            "<p style='font-size:10px; margin:0; color:#34d399;'>📡 GPS: " + s.lat.toFixed(4) + "° N, " + s.lng.toFixed(4) + "° E (±" + s.accuracy + "m)</p>" +
-          "</div>";
-
-        marker.bindPopup(popupHtml, { closeButton: false });
+        var marker = L.marker([s.lat, s.lng], { icon: customIcon });
 
         marker.on('click', function() {
           selectMarker(s.dduId, true);
@@ -678,11 +691,15 @@ private fun buildMapHtml(
           }
         });
 
+        markersClusterGroup.addLayer(marker);
+
         markersMap[s.dduId] = {
           marker: marker,
           data: s
         };
       });
+
+      map.addLayer(markersClusterGroup);
     }
 
     // =========================================================================
@@ -708,7 +725,7 @@ private fun buildMapHtml(
       vectorCanvas = document.getElementById('vector-canvas');
       vectorCanvas.style.display = 'block';
       vectorCtx = vectorCanvas.getContext('2d');
-      document.getElementById('status-banner').textContent = "🛰️ High-Resolution Vector Satellite Grid (Offline Ready)";
+      document.getElementById('status-banner').textContent = "🛰️ High-Precision Vector Satellite Engine";
 
       resizeVectorCanvas();
       window.addEventListener('resize', resizeVectorCanvas);
@@ -735,15 +752,6 @@ private fun buildMapHtml(
       return { x: x, y: y };
     }
 
-    function unprojectFromScreen(x, y) {
-      if (!vectorCanvas) return { lat: 27.4320, lng: 82.1850 };
-      var width = vectorCanvas.clientWidth;
-      var height = vectorCanvas.clientHeight;
-      var dLng = (x - width / 2) / vectorState.zoomScale;
-      var dLat = -(y - height / 2) / (vectorState.zoomScale * 1.15);
-      return { lat: vectorState.centerLat + dLat, lng: vectorState.centerLng + dLng };
-    }
-
     function renderVectorMap() {
       if (!vectorCtx || !vectorCanvas) return;
       var ctx = vectorCtx;
@@ -765,7 +773,7 @@ private fun buildMapHtml(
       ctx.fillStyle = grad;
       ctx.fillRect(0, 0, w, h);
 
-      // Draw coordinate grid lines & labels
+      // Draw coordinate grid lines
       ctx.strokeStyle = "rgba(56, 189, 248, 0.08)";
       ctx.lineWidth = 1;
       for (var x = 0; x < w; x += 60) {
@@ -836,12 +844,19 @@ private fun buildMapHtml(
         var pt = projectToScreen(s.lat, s.lng);
         var isSelected = (s.dduId === selectedId);
 
-        var color = "#00796B";
-        var emoji = "🏫";
-        if (s.type === "INSTITUTION") { color = "#00796B"; emoji = "🏛️"; }
-        else if (s.type === "LOCAL_SHOP") { color = "#E65100"; emoji = "🏪"; }
-        else if (s.type === "SUPPLIER") { color = "#1565C0"; emoji = "📦"; }
-        else { color = "#7B1FA2"; emoji = "🔍"; }
+        var color = "#15803D";
+        var emoji = "🏛️";
+        var t = ((s.type || "") + " " + (s.entityType || "")).toUpperCase();
+        if (t.indexOf("INSTITUTION") !== -1 || t.indexOf("SCHOOL") !== -1 || t.indexOf("HOSPITAL") !== -1 || t.indexOf("GOVT") !== -1) {
+          color = "#15803D"; // Green for institutional demand
+          emoji = (t.indexOf("HOSPITAL") !== -1) ? "🏥" : (t.indexOf("SCHOOL") !== -1) ? "🏫" : "🏛️";
+        } else if (t.indexOf("SHOP") !== -1 || t.indexOf("RETAIL") !== -1 || t.indexOf("STORE") !== -1 || t.indexOf("MERCHANT") !== -1) {
+          color = "#0284C7"; // Blue for local shop
+          emoji = "🏪";
+        } else {
+          color = "#EA580C"; // Orange for livelihood ecosystem
+          emoji = (t.indexOf("SUPPLIER") !== -1) ? "📦" : (t.indexOf("TEXTILE") !== -1 || t.indexOf("SAKHYA") !== -1) ? "🧵" : "🌾";
+        }
 
         // Selection glow
         if (isSelected) {
@@ -871,7 +886,7 @@ private fun buildMapHtml(
         var labelText = s.name;
         ctx.font = "bold 10px sans-serif";
         var textWidth = ctx.measureText(labelText).width;
-        var pillW = textWidth + 16;
+        var pillW = textWidth + 14;
         var pillH = 18;
         var pillX = pt.x - pillW / 2;
         var pillY = pt.y + (isSelected ? 20 : 16);
@@ -939,13 +954,11 @@ private fun buildMapHtml(
         }
       });
 
-      // Click to select
       vectorCanvas.addEventListener('click', function(e) {
         var rect = vectorCanvas.getBoundingClientRect();
         var clickX = e.clientX - rect.left;
         var clickY = e.clientY - rect.top;
 
-        // Check if any marker clicked
         for (var i = vectorState.surveys.length - 1; i >= 0; i--) {
           var s = vectorState.surveys[i];
           var pt = projectToScreen(s.lat, s.lng);
@@ -962,18 +975,18 @@ private fun buildMapHtml(
     }
 
     // =========================================================================
-    // EXPOSED PUBLIC CONTROLLER FUNCTIONS (CALLED BY ANDROID BRIDGE & BUTTONS)
+    // EXPOSED PUBLIC CONTROLLER FUNCTIONS
     // =========================================================================
     window.selectMarker = function(dduId, pan) {
       selectedId = dduId;
 
       if (activeEngine === "leaflet" && map) {
-        var prevPin = document.querySelector('.pin-marker.selected');
+        var prevPin = document.querySelector('.ddu-marker-wrap.selected');
         if (prevPin) prevPin.classList.remove('selected');
 
         var target = markersMap[dduId];
         if (target) {
-          var currentPin = document.querySelector('#pin-' + dduId + ' .pin-marker');
+          var currentPin = document.querySelector('#pin-' + dduId);
           if (currentPin) currentPin.classList.add('selected');
 
           if (pan !== false) {
@@ -1024,7 +1037,7 @@ private fun buildMapHtml(
 
     window.flyToLocation = function(lat, lng, zoom) {
       if (activeEngine === "leaflet" && map) {
-        map.flyTo([lat, lng], zoom || 18, { duration: 1.0 });
+        map.flyTo([lat, lng], zoom || 18, { duration: 0.8 });
       } else {
         vectorState.centerLat = lat;
         vectorState.centerLng = lng;
@@ -1037,8 +1050,9 @@ private fun buildMapHtml(
     window.setMapLayer = function(layerType) {
       if (activeEngine === "leaflet" && map && tileLayers) {
         if (currentLayer) map.removeLayer(currentLayer);
-        if (tileLayers[layerType]) {
-          currentLayer = tileLayers[layerType];
+        var target = tileLayers[layerType] || tileLayers['HYBRID'];
+        if (target) {
+          currentLayer = target;
           currentLayer.addTo(map);
           document.getElementById('status-banner').textContent = "🛰️ Layer: " + layerType;
         }
@@ -1074,13 +1088,12 @@ private fun buildMapHtml(
       }
     };
 
-    // Immediate DOM readiness bootstrap
     if (document.readyState === 'complete' || document.readyState === 'interactive') {
       window.tryInit();
     } else {
       document.addEventListener('DOMContentLoaded', window.tryInit);
       window.addEventListener('load', window.tryInit);
-      setTimeout(window.tryInit, 400); // Fail-safe fallback timer
+      setTimeout(window.tryInit, 500);
     }
   </script>
 </body>

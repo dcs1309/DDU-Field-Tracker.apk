@@ -488,6 +488,24 @@ class FieldIntelligenceViewModel(application: Application) : AndroidViewModel(ap
         }
     }
 
+    fun updateSurveyRecord(
+        survey: SurveyEntity,
+        products: List<ProductEntity>? = null,
+        onSuccess: () -> Unit = {}
+    ) {
+        viewModelScope.launch {
+            repository.updateSurveyRecord(survey, products, _isOnline.value)
+            onSuccess()
+        }
+    }
+
+    fun deleteSurveyRecord(dduId: String, onSuccess: () -> Unit = {}) {
+        viewModelScope.launch {
+            repository.deleteSurveyRecord(dduId)
+            onSuccess()
+        }
+    }
+
     fun addProductAlias(standard: String, alias: String) {
         viewModelScope.launch {
             repository.addProductAlias(standard, alias)

@@ -118,6 +118,49 @@ class FieldIntelligenceRepository(private val database: AppDatabase) {
         }
     }
 
+    suspend fun updateSurveyRecord(
+        survey: SurveyEntity,
+        products: List<ProductEntity>? = null,
+        isOnline: Boolean = false
+    ) = withContext(Dispatchers.IO) {
+        val updatedSurvey = survey.copy(
+            updatedTimestamp = System.currentTimeMillis(),
+            isSynced = false
+        )
+        surveyDao.updateSurvey(updatedSurvey)
+        if (products != null) {
+            productDao.deleteProductsForSurvey(survey.dduId)
+            if (products.isNotEmpty()) {
+                productDao.insertProducts(products)
+            }
+        }
+        if (isOnline && firestoreSyncManager.isFirestoreAvailable) {
+            try {
+                val updatedProducts = products ?: productDao.getProductsForSurveyDirect(survey.dduId)
+                val evidenceList = evidenceDao.getEvidenceForSurveyDirect(survey.dduId)
+                val surveyWithDetails = SurveyWithDetails(
+                    survey = updatedSurvey,
+                    products = updatedProducts,
+                    evidenceList = evidenceList
+                )
+                val synced = firestoreSyncManager.syncSurveyToFirestore(surveyWithDetails)
+                if (synced) {
+                    surveyDao.markAsSynced(survey.dduId)
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Online sync of updated survey deferred: ${e.message}")
+            }
+        }
+    }
+
+    suspend fun deleteSurveyRecord(dduId: String) = withContext(Dispatchers.IO) {
+        val survey = surveyDao.getSurveyById(dduId)
+        if (survey != null) {
+            productDao.deleteProductsForSurvey(dduId)
+            surveyDao.deleteSurvey(survey)
+        }
+    }
+
     suspend fun updateValidation(
         dduId: String,
         status: String,

@@ -35,6 +35,8 @@ import com.example.data.model.OpportunityStage
 import com.example.data.model.VillageProductionAssessmentEntity
 import com.example.ui.components.CollatedExportDialog
 import com.example.ui.components.ConfidenceBadge
+import com.example.ui.components.opportunity.OpportunityLineageHelper
+import com.example.ui.components.opportunity.OpportunitySourceRecordsDialog
 import com.example.ui.theme.DduPrimary
 import com.example.ui.theme.DduPrimaryContainer
 import com.example.viewmodel.FieldIntelligenceViewModel
@@ -64,7 +66,24 @@ fun InsightsScreen(
     val tabTitles = listOf("Stage 1 Opps", "Stage 2 Village", "Village Demand", "Smart Matching", "Export Reports")
 
     var selectedOppDetail by remember { mutableStateOf<OpportunityEntity?>(null) }
+    var selectedLineageOpp by remember { mutableStateOf<OpportunityEntity?>(null) }
     var showCollatedExportDialog by remember { mutableStateOf(false) }
+
+    selectedLineageOpp?.let { opp ->
+        val supporting = OpportunityLineageHelper.getSupportingDataForOpportunity(opp, allSurveys)
+        OpportunitySourceRecordsDialog(
+            opportunityId = opp.oppId,
+            opportunityTitle = opp.title,
+            category = opp.category,
+            confidenceLevel = opp.confidence,
+            matchingSurveys = supporting,
+            onNavigateToRecord = { dduId ->
+                selectedLineageOpp = null
+                onNavigateToRecordDetail(dduId)
+            },
+            onDismiss = { selectedLineageOpp = null }
+        )
+    }
 
     if (showCollatedExportDialog) {
         CollatedExportDialog(
@@ -183,12 +202,7 @@ fun InsightsScreen(
                         onNavigateToStage2Assessment(null, opp.oppId)
                     },
                     onDrillDownToSource = { opp ->
-                        val matching = allSurveys.firstOrNull { it.products.any { p -> opp.title.contains(p.productName, ignoreCase = true) } }
-                        if (matching != null) {
-                            onNavigateToRecordDetail(matching.survey.dduId)
-                        } else {
-                            onNavigateToRecordDetail("DDU-BAL-2026-000124")
-                        }
+                        selectedLineageOpp = opp
                     }
                 )
 
@@ -525,17 +539,55 @@ fun OpportunityDetailCard(
 
             Spacer(modifier = Modifier.height(10.dp))
 
+            // Evidence Lineage Tag
+            Surface(
+                color = Color(0xFFF1F5F9),
+                shape = RoundedCornerShape(8.dp),
+                border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 8.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        Icons.Default.VerifiedUser,
+                        contentDescription = null,
+                        tint = Color(0xFF10B981),
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = if (opp.evidenceSummary.isNotBlank()) "Evidence: ${opp.evidenceSummary}" else "Verified on-site survey records, photos & audio notes",
+                        fontSize = 10.5.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color(0xFF334155),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                OutlinedButton(
+                Button(
                     onClick = onDrillDown,
                     shape = RoundedCornerShape(8.dp),
-                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                    modifier = Modifier.weight(1f)
+                    colors = ButtonDefaults.buttonColors(containerColor = DduPrimary),
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                    modifier = Modifier
+                        .weight(1.1f)
+                        .testTag("btn_view_source_records_${opp.oppId}")
                 ) {
-                    Text("View Source Records", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Source, contentDescription = null, modifier = Modifier.size(15.dp), tint = Color.White)
+                        Spacer(modifier = Modifier.width(5.dp))
+                        Text("View Source Records", fontSize = 11.5.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                    }
                 }
 
                 Button(

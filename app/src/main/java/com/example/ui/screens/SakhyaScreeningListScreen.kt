@@ -26,6 +26,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.model.SakhyaScreeningEntity
+import com.example.ui.components.ExportTargetRecord
+import com.example.ui.components.SingleRecordExportDialog
 import com.example.viewmodel.FieldIntelligenceViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -41,6 +43,7 @@ fun SakhyaScreeningListScreen(
 
     var searchQuery by remember { mutableStateOf("") }
     var selectedFilter by remember { mutableStateOf("ALL") }
+    var exportTarget by remember { mutableStateOf<SakhyaScreeningEntity?>(null) }
 
     val filteredList = remember(allScreenings, searchQuery, selectedFilter) {
         allScreenings.filter { item ->
@@ -90,6 +93,18 @@ fun SakhyaScreeningListScreen(
                     }
                 },
                 actions = {
+                    if (allScreenings.isNotEmpty()) {
+                        IconButton(
+                            onClick = { exportTarget = filteredList.firstOrNull() ?: allScreenings.first() },
+                            modifier = Modifier.testTag("btn_export_sakhya_top")
+                        ) {
+                            Icon(
+                                Icons.Default.FileDownload,
+                                contentDescription = "Export Sakhya Prospect (PDF/Excel/PPTM)",
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
                     IconButton(
                         onClick = { onNavigateToNewScreening(null) },
                         modifier = Modifier.testTag("btn_add_sakhya_screening_top")
@@ -263,12 +278,22 @@ fun SakhyaScreeningListScreen(
                             screening = screening,
                             onClick = { onNavigateToDetail(screening.screeningId) },
                             onEdit = { onNavigateToNewScreening(screening.screeningId) },
-                            onDelete = { viewModel.deleteSakhyaScreening(screening) }
+                            onDelete = { viewModel.deleteSakhyaScreening(screening) },
+                            onExport = { exportTarget = screening }
                         )
                     }
                 }
             }
         }
+    }
+
+    if (exportTarget != null) {
+        val userProfile by viewModel.currentUserProfile.collectAsStateWithLifecycle()
+        SingleRecordExportDialog(
+            targetRecord = ExportTargetRecord.SakhyaRecord(exportTarget!!),
+            userProfile = userProfile,
+            onDismiss = { exportTarget = null }
+        )
     }
 }
 
@@ -299,7 +324,8 @@ private fun SakhyaProspectCard(
     screening: SakhyaScreeningEntity,
     onClick: () -> Unit,
     onEdit: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    onExport: () -> Unit
 ) {
     var showDeleteConfirm by remember { mutableStateOf(false) }
 
@@ -466,7 +492,18 @@ private fun SakhyaProspectCard(
                     )
                 }
 
-                Row {
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    IconButton(
+                        onClick = onExport,
+                        modifier = Modifier.size(28.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.FileDownload,
+                            contentDescription = "Export Prospect Dossier",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
                     IconButton(
                         onClick = onEdit,
                         modifier = Modifier.size(28.dp)

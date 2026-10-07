@@ -46,5 +46,7 @@ sealed class Screen(val route: String, val title: String) {
         }
     }
     object Stage2DduSelection : Screen("stage2_ddu_selection", "Stage 2 · Final Product List for DDU Selection")
+    object Analytics : Screen("analytics", "Analytics")
+    object WebPortal : Screen("web_portal", "Master Web Portal")
 }
 

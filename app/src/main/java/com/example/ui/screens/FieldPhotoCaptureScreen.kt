@@ -34,6 +34,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ReceiptLong
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
@@ -45,7 +46,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -54,6 +54,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.example.data.model.EvidenceEntity
@@ -113,7 +114,7 @@ fun FieldPhotoCaptureScreen(
         "Shopfront & Cluster" to Icons.Default.Storefront,
         "Premises & Building" to Icons.Default.Business,
         "Supplier Label & Pack" to Icons.Default.LocalShipping,
-        "Bill & Invoice" to Icons.Default.ReceiptLong,
+        "Bill & Invoice" to Icons.AutoMirrored.Filled.ReceiptLong,
         "Existing Stock" to Icons.Default.Warehouse
     )
     var selectedCategory by remember { mutableStateOf(categories[0].first) }

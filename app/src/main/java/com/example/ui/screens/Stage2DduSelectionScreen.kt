@@ -23,6 +23,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.model.VillageProductionAssessmentEntity
+import com.example.ui.components.ExportTargetRecord
+import com.example.ui.components.SingleRecordExportDialog
 import com.example.viewmodel.FieldIntelligenceViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -41,6 +43,7 @@ fun Stage2DduSelectionScreen(
 
     // Filter chip: All, Selected, Needs Support, Dropped
     var filterStatus by remember { mutableStateOf("ALL") }
+    var exportTarget by remember { mutableStateOf<VillageProductionAssessmentEntity?>(null) }
 
     val sortedList = remember(assessments, filterStatus) {
         val base = assessments.sortedWith(
@@ -80,6 +83,18 @@ fun Stage2DduSelectionScreen(
                     }
                 },
                 actions = {
+                    if (assessments.isNotEmpty()) {
+                        IconButton(
+                            onClick = { exportTarget = sortedList.firstOrNull() ?: assessments.first() },
+                            modifier = Modifier.testTag("action_export_stage2")
+                        ) {
+                            Icon(
+                                Icons.Default.FileDownload,
+                                contentDescription = "Export DDU 2 Assessment (PDF/Excel/PPTM)",
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
                     IconButton(
                         onClick = {
                             viewModel.syncWithFirestore { success, msg ->
@@ -281,7 +296,8 @@ fun Stage2DduSelectionScreen(
                         rankNumber = index + 1,
                         assessment = item,
                         onClick = { onNavigateToEditAssessment(item.assessmentId) },
-                        onDelete = { viewModel.deleteStage2Assessment(item) }
+                        onDelete = { viewModel.deleteStage2Assessment(item) },
+                        onExport = { exportTarget = item }
                     )
                 }
             }
@@ -291,6 +307,15 @@ fun Stage2DduSelectionScreen(
             }
         }
     }
+
+    if (exportTarget != null) {
+        val userProfile by viewModel.currentUserProfile.collectAsStateWithLifecycle()
+        SingleRecordExportDialog(
+            targetRecord = ExportTargetRecord.Stage2Record(exportTarget!!),
+            userProfile = userProfile,
+            onDismiss = { exportTarget = null }
+        )
+    }
 }
 
 @Composable
@@ -298,7 +323,8 @@ private fun Stage2DecisionItemCard(
     rankNumber: Int,
     assessment: VillageProductionAssessmentEntity,
     onClick: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    onExport: () -> Unit
 ) {
     val isCriticalPass = assessment.criticalityRatingPass
     val isSelected = isCriticalPass && (assessment.samplingChecked || assessment.readinessScore >= 5)
@@ -412,7 +438,15 @@ private fun Stage2DecisionItemCard(
                     fontSize = 10.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                Row {
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    IconButton(onClick = onExport, modifier = Modifier.size(28.dp)) {
+                        Icon(
+                            Icons.Default.FileDownload,
+                            contentDescription = "Export Record",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
                     IconButton(onClick = onClick, modifier = Modifier.size(28.dp)) {
                         Icon(Icons.Default.Edit, contentDescription = "Edit", modifier = Modifier.size(16.dp))
                     }

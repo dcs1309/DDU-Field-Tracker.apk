@@ -23,6 +23,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.ui.components.ExportTargetRecord
+import com.example.ui.components.SingleRecordExportDialog
 import com.example.viewmodel.FieldIntelligenceViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -55,6 +57,8 @@ fun SakhyaDetailScreen(
         }
         return
     }
+
+    var showExportDialog by remember { mutableStateOf(false) }
 
     val readinessColor = when {
         screening.readinessScore >= 75 -> Color(0xFF15803D)
@@ -89,22 +93,37 @@ fun SakhyaDetailScreen(
                 },
                 actions = {
                     IconButton(
+                        onClick = { showExportDialog = true },
+                        modifier = Modifier.testTag("btn_export_sakhya_detail")
+                    ) {
+                        Icon(
+                            Icons.Default.FileDownload,
+                            contentDescription = "Export Dossier (PDF/Excel/PPTM)",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                    IconButton(
                         onClick = { onNavigateToEdit(screening.screeningId) },
                         modifier = Modifier.testTag("btn_edit_sakhya_detail")
                     ) {
                         Icon(Icons.Default.Edit, contentDescription = "Edit")
                     }
-                    IconButton(
-                        onClick = {
-                            Toast.makeText(context, "Exporting Sakhya Dossier for ${screening.entrepreneurName}", Toast.LENGTH_SHORT).show()
-                        }
-                    ) {
-                        Icon(Icons.Default.Share, contentDescription = "Export")
-                    }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface
                 )
+            )
+        },
+        floatingActionButton = {
+            ExtendedFloatingActionButton(
+                onClick = { showExportDialog = true },
+                containerColor = Color(0xFF15803D),
+                contentColor = Color.White,
+                icon = { Icon(Icons.Default.FileDownload, contentDescription = null) },
+                text = { Text("Export Dossier (PDF/Excel/PPTM)", fontWeight = FontWeight.Bold) },
+                modifier = Modifier
+                    .navigationBarsPadding()
+                    .testTag("btn_export_sakhya_fab")
             )
         },
         modifier = modifier
@@ -343,6 +362,15 @@ fun SakhyaDetailScreen(
 
             Spacer(modifier = Modifier.height(30.dp))
         }
+    }
+
+    if (showExportDialog) {
+        val userProfile by viewModel.currentUserProfile.collectAsStateWithLifecycle()
+        SingleRecordExportDialog(
+            targetRecord = ExportTargetRecord.SakhyaRecord(screening),
+            userProfile = userProfile,
+            onDismiss = { showExportDialog = false }
+        )
     }
 }
 

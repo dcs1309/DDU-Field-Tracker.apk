@@ -87,6 +87,12 @@ interface ProductDao {
     @Query("SELECT * FROM products WHERE surveyDduId = :dduId")
     fun getProductsForSurvey(dduId: String): Flow<List<ProductEntity>>
 
+    @Query("SELECT * FROM products WHERE surveyDduId = :dduId")
+    suspend fun getProductsForSurveyDirect(dduId: String): List<ProductEntity>
+
+    @Query("DELETE FROM products WHERE surveyDduId = :dduId")
+    suspend fun deleteProductsForSurvey(dduId: String)
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertProduct(product: ProductEntity): Long
 
@@ -110,6 +116,9 @@ interface EvidenceDao {
 
     @Query("SELECT * FROM evidence WHERE surveyDduId = :dduId ORDER BY timestamp DESC")
     fun getEvidenceForSurvey(dduId: String): Flow<List<EvidenceEntity>>
+
+    @Query("SELECT * FROM evidence WHERE surveyDduId = :dduId ORDER BY timestamp DESC")
+    suspend fun getEvidenceForSurveyDirect(dduId: String): List<EvidenceEntity>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertEvidence(evidence: EvidenceEntity): Long

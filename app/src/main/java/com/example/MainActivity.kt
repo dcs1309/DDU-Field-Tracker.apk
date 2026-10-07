@@ -88,10 +88,10 @@ fun DduApp(viewModel: FieldIntelligenceViewModel) {
             unselectedIcon = Icons.Outlined.Map
         ),
         BottomNavItem(
-            route = Screen.Insights.route,
-            title = "Insights",
-            selectedIcon = Icons.Filled.AutoGraph,
-            unselectedIcon = Icons.Outlined.AutoGraph,
+            route = Screen.Analytics.route,
+            title = "Analytics",
+            selectedIcon = Icons.Filled.Analytics,
+            unselectedIcon = Icons.Outlined.Analytics,
             badgeCount = stats.opportunitiesCount
         )
     )
@@ -102,6 +102,7 @@ fun DduApp(viewModel: FieldIntelligenceViewModel) {
         Screen.Records.route,
         Screen.SurveyWizard.route,
         Screen.Map.route,
+        Screen.Analytics.route,
         Screen.Insights.route
     )
 
@@ -197,7 +198,7 @@ fun DduApp(viewModel: FieldIntelligenceViewModel) {
                         navController.navigate(Screen.Records.route)
                     },
                     onNavigateToMap = { navController.navigate(Screen.Map.route) },
-                    onNavigateToInsights = { navController.navigate(Screen.Insights.route) },
+                    onNavigateToInsights = { navController.navigate(Screen.Analytics.route) },
                     onNavigateToQuickObservation = { navController.navigate(Screen.QuickObservation.route) },
                     onNavigateToOpportunityGraph = { navController.navigate(Screen.OpportunityGraph.route) },
                     onNavigateToPhotoCapture = { navController.navigate(Screen.PhotoCapture.createRoute()) },
@@ -211,6 +212,7 @@ fun DduApp(viewModel: FieldIntelligenceViewModel) {
                     onNavigateToStage2DduSelection = {
                         navController.navigate(Screen.Stage2DduSelection.route)
                     },
+                    onNavigateToWebPortal = { navController.navigate(Screen.WebPortal.route) },
                     onSignOut = {
                         navController.navigate(Screen.Login.route) {
                             popUpTo(0) { inclusive = true }
@@ -250,6 +252,25 @@ fun DduApp(viewModel: FieldIntelligenceViewModel) {
                     onNavigateToRecordDetail = { dduId ->
                         navController.navigate(Screen.RecordDetail.createRoute(dduId))
                     }
+                )
+            }
+
+            composable(Screen.Analytics.route) {
+                AnalyticsScreen(
+                    viewModel = viewModel,
+                    onNavigateToRecordDetail = { dduId ->
+                        navController.navigate(Screen.RecordDetail.createRoute(dduId))
+                    },
+                    onNavigateToOpportunityGraph = { navController.navigate(Screen.OpportunityGraph.route) },
+                    onNavigateToMap = { navController.navigate(Screen.Map.route) },
+                    onNavigateToWebPortal = { navController.navigate(Screen.WebPortal.route) }
+                )
+            }
+
+            composable(Screen.WebPortal.route) {
+                MasterWebPortalScreen(
+                    viewModel = viewModel,
+                    onNavigateBack = { navController.popBackStack() }
                 )
             }
 

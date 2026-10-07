@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -19,6 +20,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -27,6 +29,9 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.model.SurveyWithDetails
 import com.example.ui.components.ConfidenceBadge
+import com.example.ui.components.EditRecordDialog
+import com.example.ui.components.ExportTargetRecord
+import com.example.ui.components.SingleRecordExportDialog
 import com.example.ui.components.StatusBadge
 import com.example.ui.theme.*
 import com.example.viewmodel.FieldIntelligenceViewModel
@@ -40,10 +45,14 @@ fun RecordsListScreen(
     onNavigateToNewSurvey: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     val surveys by viewModel.filteredSurveys.collectAsStateWithLifecycle()
     val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
     val selectedStatus by viewModel.selectedStatusFilter.collectAsStateWithLifecycle()
     val selectedVillage by viewModel.selectedVillageFilter.collectAsStateWithLifecycle()
+
+    var editRecordTarget by remember { mutableStateOf<SurveyWithDetails?>(null) }
+    var exportRecordTarget by remember { mutableStateOf<SurveyWithDetails?>(null) }
 
     LaunchedEffect(initialStatusFilter) {
         if (!initialStatusFilter.isNullOrBlank()) {
@@ -82,6 +91,18 @@ fun RecordsListScreen(
                     }
                 },
                 actions = {
+                    if (surveys.isNotEmpty()) {
+                        IconButton(
+                            onClick = { exportRecordTarget = surveys.first() },
+                            modifier = Modifier.testTag("records_export_action")
+                        ) {
+                            Icon(
+                                Icons.Default.FileDownload,
+                                contentDescription = "Export Record (PDF/Excel/PPTM)",
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
                     IconButton(
                         onClick = onNavigateToNewSurvey,
                         modifier = Modifier.testTag("records_add_new_survey")
@@ -250,7 +271,9 @@ fun RecordsListScreen(
                     items(surveys, key = { it.survey.dduId }) { record ->
                         RecordListItemCard(
                             record = record,
-                            onClick = { onNavigateToRecordDetail(record.survey.dduId) }
+                            onClick = { onNavigateToRecordDetail(record.survey.dduId) },
+                            onEdit = { editRecordTarget = record },
+                            onExport = { exportRecordTarget = record }
                         )
                     }
                     item {
@@ -260,12 +283,36 @@ fun RecordsListScreen(
             }
         }
     }
+
+    if (editRecordTarget != null) {
+        EditRecordDialog(
+            record = editRecordTarget!!,
+            onDismiss = { editRecordTarget = null },
+            onSave = { updatedSurvey, updatedProducts ->
+                viewModel.updateSurveyRecord(updatedSurvey, updatedProducts) {
+                    Toast.makeText(context, "Field record updated successfully", Toast.LENGTH_SHORT).show()
+                    editRecordTarget = null
+                }
+            }
+        )
+    }
+
+    if (exportRecordTarget != null) {
+        val userProfile by viewModel.currentUserProfile.collectAsStateWithLifecycle()
+        SingleRecordExportDialog(
+            targetRecord = ExportTargetRecord.SurveyRecord(exportRecordTarget!!),
+            userProfile = userProfile,
+            onDismiss = { exportRecordTarget = null }
+        )
+    }
 }
 
 @Composable
 fun RecordListItemCard(
     record: SurveyWithDetails,
     onClick: () -> Unit,
+    onEdit: () -> Unit = {},
+    onExport: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val survey = record.survey
@@ -428,6 +475,40 @@ fun RecordListItemCard(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
                     )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(6.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                TextButton(
+                    onClick = onExport,
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                ) {
+                    Icon(
+                        Icons.Default.FileDownload,
+                        contentDescription = null,
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Export", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                }
+                Spacer(modifier = Modifier.width(4.dp))
+                TextButton(
+                    onClick = onEdit,
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                ) {
+                    Icon(
+                        Icons.Default.Edit,
+                        contentDescription = null,
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Edit", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
                 }
             }
         }

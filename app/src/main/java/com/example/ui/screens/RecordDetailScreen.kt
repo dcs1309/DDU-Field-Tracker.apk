@@ -2,6 +2,7 @@ package com.example.ui.screens
 
 import android.content.Intent
 import android.net.Uri
+import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -11,6 +12,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
@@ -58,6 +60,8 @@ fun RecordDetailScreen(
     val tabTitles = listOf("Overview", "Evidence", "Related", "Opportunity")
 
     var showValidationDialog by remember { mutableStateOf(false) }
+    var showEditDialog by remember { mutableStateOf(false) }
+    var showExportDialog by remember { mutableStateOf(false) }
 
     if (record == null) {
         Box(
@@ -92,10 +96,28 @@ fun RecordDetailScreen(
                         onClick = onNavigateBack,
                         modifier = Modifier.testTag("record_detail_back")
                     ) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 },
                 actions = {
+                    IconButton(
+                        onClick = { showExportDialog = true },
+                        modifier = Modifier.testTag("record_detail_export_action")
+                    ) {
+                        Icon(
+                            Icons.Default.FileDownload,
+                            contentDescription = "Export Record (PDF/Excel/PPTM)",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+
+                    IconButton(
+                        onClick = { showEditDialog = true },
+                        modifier = Modifier.testTag("record_detail_edit_action")
+                    ) {
+                        Icon(Icons.Default.Edit, contentDescription = "Edit Record")
+                    }
+
                     IconButton(onClick = {
                         val sendIntent: Intent = Intent().apply {
                             action = Intent.ACTION_SEND
@@ -119,16 +141,35 @@ fun RecordDetailScreen(
             )
         },
         floatingActionButton = {
-            ExtendedFloatingActionButton(
-                onClick = { /* Edit record */ },
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary,
-                icon = { Icon(Icons.Default.Edit, contentDescription = null) },
-                text = { Text("Edit Record", fontWeight = FontWeight.Bold) },
-                modifier = Modifier
-                    .navigationBarsPadding()
-                    .testTag("edit_record_fab")
-            )
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.navigationBarsPadding()
+            ) {
+                OutlinedButton(
+                    onClick = { showExportDialog = true },
+                    shape = RoundedCornerShape(16.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        containerColor = MaterialTheme.colorScheme.surface,
+                        contentColor = MaterialTheme.colorScheme.primary
+                    ),
+                    border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary),
+                    modifier = Modifier.testTag("record_detail_export_btn")
+                ) {
+                    Icon(Icons.Default.FileDownload, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Export", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                }
+
+                ExtendedFloatingActionButton(
+                    onClick = { showEditDialog = true },
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary,
+                    icon = { Icon(Icons.Default.Edit, contentDescription = null) },
+                    text = { Text("Edit Record", fontWeight = FontWeight.Bold) },
+                    modifier = Modifier.testTag("edit_record_fab")
+                )
+            }
         }
     ) { innerPadding ->
         LazyColumn(
@@ -234,7 +275,7 @@ fun RecordDetailScreen(
                             }
                         }
 
-                        Divider(modifier = Modifier.padding(vertical = 12.dp))
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
 
                         // Surveyor & Date metadata
                         Text(
@@ -572,7 +613,7 @@ fun RecordDetailScreen(
                                             Text("${rel.survey.village} • Needs: ${rel.products.joinToString { it.productName }}", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                         }
                                     }
-                                    Divider()
+                                    HorizontalDivider()
                                 }
                             }
                         }
@@ -670,6 +711,28 @@ fun RecordDetailScreen(
                 viewModel.updateSurveyValidation(survey.dduId, newStatus, remarks)
                 showValidationDialog = false
             }
+        )
+    }
+
+    if (showEditDialog) {
+        EditRecordDialog(
+            record = record,
+            onDismiss = { showEditDialog = false },
+            onSave = { updatedSurvey, updatedProducts ->
+                viewModel.updateSurveyRecord(updatedSurvey, updatedProducts) {
+                    Toast.makeText(context, "Field record updated successfully", Toast.LENGTH_SHORT).show()
+                    showEditDialog = false
+                }
+            }
+        )
+    }
+
+    if (showExportDialog) {
+        val userProfile by viewModel.currentUserProfile.collectAsStateWithLifecycle()
+        SingleRecordExportDialog(
+            targetRecord = ExportTargetRecord.SurveyRecord(record),
+            userProfile = userProfile,
+            onDismiss = { showExportDialog = false }
         )
     }
 }
